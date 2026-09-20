@@ -1,0 +1,29 @@
+[package]
+name = "wired-table-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.9"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+garde = { version = "0.23.0", features = ["derive", "email"] }
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.1", features = ["full"] }
+sea-orm = { version = "2.0.3", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+  "macros",
+  "entity-registry",
+  "schema-sync",
+] }
+dotenvy = "0.15.7"
+argon2 = "0.6.0"
+chrono = "0.4.45"
+base64 = "0.23.1"
+jsonwebtoken = { version = "11.1.0", default-features = false, features = [
+  "rust_crypto",
+] }
+rand = "0.10.2"
+sha2 = "0.11.0"
+uuid = "1.26.1"
+time = "0.3.55"
