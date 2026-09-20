@@ -6,12 +6,11 @@ mod extract;
 mod http;
 mod state;
 
-use std::env;
-
 use axum::serve;
 use dotenvy::dotenv;
 use http::router;
 use state::AppState;
+use std::env;
 use tokio::net::TcpListener;
 
 #[tokio::main]

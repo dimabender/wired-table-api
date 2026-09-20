@@ -1,3 +1,5 @@
+mod dto;
+
 use crate::{
     authentication::{
         password::{hash_password, verify_password},
@@ -7,6 +9,7 @@ use crate::{
     entity::{session, user},
     error::{ApiError, MessageItem},
     extract::ValidJson,
+    http::authentication::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest},
     state::AppState,
 };
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
@@ -15,22 +18,10 @@ use axum_extra::extract::{
     cookie::{Cookie, SameSite},
 };
 use chrono::Utc;
-use garde::Validate;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter,
     TransactionTrait,
 };
-use serde::{Deserialize, Serialize};
-
-#[derive(Validate, Deserialize)]
-pub struct RegisterRequest {
-    #[garde(length(min = 3, max = 32))]
-    username: String,
-    #[garde(email, length(max = 254))]
-    email: String,
-    #[garde(length(min = 8, max = 128))]
-    password: String,
-}
 
 pub async fn register(
     State(state): State<AppState>,
@@ -82,19 +73,6 @@ pub async fn register(
     Ok(StatusCode::CREATED)
 }
 
-#[derive(Validate, Deserialize)]
-pub struct LoginRequest {
-    #[garde(length(min = 3, max = 32))]
-    username: String,
-    #[garde(length(min = 8, max = 128))]
-    password: String,
-}
-
-#[derive(Serialize)]
-pub struct LoginResponse {
-    pub access_token: String,
-}
-
 pub async fn login(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -123,11 +101,6 @@ pub async fn login(
             access_token: tokens.access_token,
         }),
     ))
-}
-
-#[derive(Serialize)]
-pub struct RefreshResponse {
-    pub access_token: String,
 }
 
 pub async fn refresh(

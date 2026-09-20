@@ -1,7 +1,6 @@
+use crate::state::AppState;
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
-
-use crate::state::AppState;
 
 #[derive(Serialize)]
 struct HealthResponse {
