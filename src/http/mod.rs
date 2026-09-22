@@ -1,6 +1,6 @@
 mod authentication;
 mod health;
-mod middleware;
+pub mod middleware;
 mod user;
 
 use crate::state::AppState;

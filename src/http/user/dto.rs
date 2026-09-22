@@ -1,8 +1,7 @@
+use crate::entity::user;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::Serialize;
 use uuid::Uuid;
-
-use crate::entity::user;
 
 #[derive(Serialize)]
 pub struct MeResponse {
