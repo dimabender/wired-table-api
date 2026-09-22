@@ -4,13 +4,14 @@ mod entity;
 mod error;
 mod extract;
 mod http;
+mod rate_limit;
 mod state;
 
 use axum::serve;
 use dotenvy::dotenv;
 use http::router;
 use state::AppState;
-use std::env;
+use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -29,5 +30,10 @@ async fn main() {
         "Listening on {} port",
         listener.local_addr().unwrap().port()
     );
-    serve(listener, app).await.unwrap();
+    serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
