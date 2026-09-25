@@ -6,6 +6,7 @@ mod extract;
 mod http;
 mod rate_limit;
 mod state;
+mod tasks;
 
 use axum::serve;
 use dotenvy::dotenv;
@@ -19,6 +20,9 @@ async fn main() {
     dotenv().ok();
 
     let db = database::init_db().await.expect("failed to init db");
+
+    tasks::authentication_session_cleanup::spawn(db.clone());
+
     let secret = env::var("SECRET").expect("SECRET must be set").into_bytes();
     let state = AppState { db, secret };
 
