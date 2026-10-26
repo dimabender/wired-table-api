@@ -2,7 +2,7 @@ mod dto;
 mod handlers;
 
 use crate::{
-    http::authentication::handlers::{login, logout, refresh, register},
+    http::authentication::handlers::{login, logout, register},
     rate_limit::RateLimitExt,
     state::AppState,
 };
@@ -20,11 +20,6 @@ pub fn routes() -> Router<AppState> {
             Router::new()
                 .route("/login", post(login))
                 .rate_limit_ip(5, Duration::from_mins(15)),
-        )
-        .merge(
-            Router::new()
-                .route("/refresh", post(refresh))
-                .rate_limit_ip(20, Duration::from_mins(20)),
         )
         .merge(
             Router::new()

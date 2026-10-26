@@ -23,10 +23,9 @@ async fn main() {
 
     tasks::authentication_session_cleanup::spawn(db.clone());
 
-    let secret = env::var("SECRET").expect("SECRET must be set").into_bytes();
     let port = env::var("API_PORT").expect("API_PORT must be set");
 
-    let state = AppState { db, secret };
+    let state = AppState { db };
 
     let app = router(state.clone()).with_state(state);
 

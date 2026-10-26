@@ -1,25 +1,21 @@
 use crate::{
     authentication::{
         password::{hash_password, verify_password},
-        session::{IssuedTokens, issue_session_tokens},
-        token::{REFRESH_TOKEN_TTL_DAYS, hash_token},
+        session::create_session,
+        token::{SESSION_ABSOLUTE_TTL_DAYS, hash_token},
     },
     entity::{session, user},
     error::{ApiError, MessageItem},
     extract::ValidJson,
-    http::authentication::dto::{LoginRequest, LoginResponse, RefreshResponse, RegisterRequest},
+    http::authentication::dto::{LoginRequest, RegisterRequest},
     state::AppState,
 };
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{extract::State, http::StatusCode};
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
-use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter,
-    TransactionTrait,
-};
+use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter};
 
 pub async fn register(
     State(state): State<AppState>,
@@ -42,14 +38,14 @@ pub async fn register(
     if username_taken {
         messages.push(MessageItem::new(
             Some("username".to_string()),
-            "username already taken".to_string(),
+            "Username already taken.".to_string(),
         ));
     }
 
     if email_taken {
         messages.push(MessageItem::new(
             Some("email".to_string()),
-            "email already taken".to_string(),
+            "Email already taken.".to_string(),
         ));
     }
 
@@ -75,130 +71,52 @@ pub async fn login(
     State(state): State<AppState>,
     jar: CookieJar,
     ValidJson(req): ValidJson<LoginRequest>,
-) -> Result<(CookieJar, Json<LoginResponse>), ApiError> {
-    let user = user::Entity::find()
-        .filter(user::Column::Username.eq(&req.username))
+) -> Result<CookieJar, ApiError> {
+    let user = user::Entity::find_by_email(&req.email)
         .one(&state.db)
         .await?
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "invalid username or password"))?;
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid username or password."))?;
 
     if !verify_password(&req.password, &user.password)? {
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
-            "invalid username or password",
+            "Invalid username or password.",
         ));
     }
 
-    let tokens = issue_session_tokens(&state.db, &state.secret, user.id).await?;
+    let tokens = create_session(&state.db, user.id, None).await?;
 
-    let refresh_cookie = build_refresh_cookie(tokens.refresh_token);
+    let cookie = build_cookie(tokens.token);
 
-    Ok((
-        jar.add(refresh_cookie),
-        Json(LoginResponse {
-            access_token: tokens.access_token,
-        }),
-    ))
-}
-
-pub async fn refresh(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> Result<(CookieJar, Json<RefreshResponse>), ApiError> {
-    let raw_token = jar
-        .get("refresh_token")
-        .map(|c| c.value().to_string())
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "no refresh token"))?;
-
-    let token_hash = hash_token(&raw_token);
-
-    let current_session = session::Entity::find()
-        .filter(session::Column::Token.eq(&token_hash))
-        .one(&state.db)
-        .await?
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "invalid refresh token"))?;
-
-    if current_session.revoked_at.is_some() {
-        return Err(ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "token reuse detected, all sessions revoked",
-        ));
-    }
-
-    if current_session.expires_at < Utc::now() {
-        return Err(ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "refresh token expired",
-        ));
-    }
-
-    let user_id = current_session.user_id;
-    let secret = state.secret.clone();
-
-    let tokens = state
-        .db
-        .transaction::<_, IssuedTokens, ApiError>(|txn| {
-            Box::pin(async move {
-                let tokens = issue_session_tokens(txn, &secret, user_id).await?;
-
-                let mut old_session: session::ActiveModel = current_session.into();
-                old_session.revoked_at = Set(Some(Utc::now()));
-                old_session.replaced_by = Set(Some(tokens.session.id));
-                old_session.update(txn).await?;
-
-                Ok(tokens)
-            })
-        })
-        .await
-        .map_err(|e| match e {
-            sea_orm::TransactionError::Connection(db_err) => ApiError::from(db_err),
-            sea_orm::TransactionError::Transaction(db_err) => ApiError::from(db_err),
-        })?;
-
-    let refresh_cookie = build_refresh_cookie(tokens.refresh_token);
-
-    Ok((
-        jar.add(refresh_cookie),
-        Json(RefreshResponse {
-            access_token: tokens.access_token,
-        }),
-    ))
+    Ok(jar.add(cookie))
 }
 
 pub async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<CookieJar, ApiError> {
-    if let Some(cookie) = jar.get("refresh_token") {
+    if let Some(cookie) = jar.get("__Host-session") {
         let token_hash = hash_token(cookie.value());
 
-        if let Some(session) = session::Entity::find()
-            .filter(session::Column::Token.eq(&token_hash))
-            .one(&state.db)
-            .await?
-        {
-            if session.revoked_at.is_none() {
-                let mut session: session::ActiveModel = session.into();
-                session.revoked_at = Set(Some(Utc::now()));
-                session.update(&state.db).await?;
-            }
-        }
+        session::Entity::delete_by_token(&token_hash)
+            .exec(&state.db)
+            .await?;
     }
 
-    let expired_cookie = Cookie::build(("refresh_token", ""))
+    let expired_cookie = Cookie::build(("__Host-session", ""))
         .http_only(true)
-        .secure(false)
-        .same_site(SameSite::Strict)
-        .path("/authentication")
+        .secure(true)
+        .same_site(SameSite::Lax)
+        .path("/")
         .max_age(time::Duration::ZERO)
         .build();
 
     Ok(jar.add(expired_cookie))
 }
 
-fn build_refresh_cookie(raw_token: String) -> Cookie<'static> {
-    Cookie::build(("refresh_token", raw_token))
+fn build_cookie(raw_token: String) -> Cookie<'static> {
+    Cookie::build(("__Host-session", raw_token))
         .http_only(true)
-        .secure(false)
-        .same_site(SameSite::Strict)
-        .path("/authentication")
-        .max_age(time::Duration::days(REFRESH_TOKEN_TTL_DAYS))
+        .secure(true)
+        .same_site(SameSite::Lax)
+        .path("/")
+        .max_age(time::Duration::days(SESSION_ABSOLUTE_TTL_DAYS))
         .build()
 }

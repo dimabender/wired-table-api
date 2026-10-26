@@ -77,7 +77,7 @@ async fn rate_limit_by_ip(
     } else {
         Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
-            "too many requests",
+            "Too many requests. Please try again later.",
         ))
     }
 }
@@ -98,7 +98,7 @@ async fn rate_limit_by_user(
     } else {
         Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
-            "too many requests",
+            "Too many requests. Please try again later.",
         ))
     }
 }

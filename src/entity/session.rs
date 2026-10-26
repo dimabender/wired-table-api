@@ -1,4 +1,5 @@
-use sea_orm::entity::prelude::*;
+use chrono::Utc;
+use sea_orm::{ActiveValue::Set, entity::prelude::*};
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
@@ -19,11 +20,24 @@ pub struct Model {
     #[sea_orm(unique)]
     pub token: String,
     pub expires_at: DateTimeUtc,
-    pub revoked_at: Option<DateTimeUtc>,
-    pub replaced_by: Option<Uuid>,
+    pub absolute_expires_at: DateTimeUtc,
+    pub user_agent: Option<String>,
 
     #[sea_orm(default_expr = "Expr::current_timestamp()")]
     pub created_at: DateTimeUtc,
+    #[sea_orm(default_expr = "Expr::current_timestamp()")]
+    pub updated_at: DateTimeUtc,
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+#[async_trait::async_trait]
+impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        if !insert {
+            self.updated_at = Set(Utc::now())
+        }
+        Ok(self)
+    }
+}
