@@ -1,9 +1,10 @@
 mod authentication;
+mod cors;
 mod health;
 pub mod middleware;
 mod user;
 
-use crate::state::AppState;
+use crate::{http::cors::cors_layer, state::AppState};
 use axum::{Router, middleware::from_fn_with_state};
 
 pub fn router(state: AppState) -> Router<AppState> {
@@ -15,4 +16,5 @@ pub fn router(state: AppState) -> Router<AppState> {
         .nest("/authentication", authentication::routes())
         .merge(protected)
         .merge(health::routes())
+        .layer(cors_layer())
 }

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use axum::{
     Json,
@@ -16,6 +16,7 @@ pub struct ApiError {
 
 #[derive(Serialize, Debug)]
 pub struct MessageItem {
+    #[serde(skip_serializing_if = "Option::is_none")]
     field: Option<String>,
     message: String,
 }
@@ -83,12 +84,6 @@ impl From<argon2::password_hash::Error> for ApiError {
 
 impl From<sea_orm::DbErr> for ApiError {
     fn from(err: sea_orm::DbErr) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-    }
-}
-
-impl From<jsonwebtoken::errors::Error> for ApiError {
-    fn from(err: jsonwebtoken::errors::Error) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
     }
 }

@@ -6,6 +6,7 @@ mod extract;
 mod http;
 mod rate_limit;
 mod state;
+mod tasks;
 
 use axum::serve;
 use dotenvy::dotenv;
@@ -19,12 +20,17 @@ async fn main() {
     dotenv().ok();
 
     let db = database::init_db().await.expect("failed to init db");
-    let secret = env::var("SECRET").expect("SECRET must be set").into_bytes();
-    let state = AppState { db, secret };
+
+    tasks::authentication_session_cleanup::spawn(db.clone());
+
+    let port = env::var("API_PORT").expect("API_PORT must be set");
+
+    let state = AppState { db };
 
     let app = router(state.clone()).with_state(state);
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let address = format!("0.0.0.0:{port}");
+    let listener = TcpListener::bind(&address).await.unwrap();
 
     println!(
         "Listening on {} port",

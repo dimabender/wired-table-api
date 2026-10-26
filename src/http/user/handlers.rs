@@ -14,7 +14,7 @@ pub async fn me(
     let user = user::Entity::find_by_id(auth.user_id)
         .one(&state.db)
         .await?
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "user not found"))?;
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "User not found."))?;
 
     Ok(Json(user.into()))
 }
