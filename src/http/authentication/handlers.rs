@@ -10,12 +10,17 @@ use crate::{
     http::authentication::dto::{LoginRequest, RegisterRequest},
     state::AppState,
 };
-use axum::{extract::State, http::StatusCode};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode, header::USER_AGENT},
+};
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
 use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter};
+
+const USER_AGENT_MAX_LEN: usize = 512;
 
 pub async fn register(
     State(state): State<AppState>,
@@ -70,6 +75,7 @@ pub async fn register(
 pub async fn login(
     State(state): State<AppState>,
     jar: CookieJar,
+    headers: HeaderMap,
     ValidJson(req): ValidJson<LoginRequest>,
 ) -> Result<CookieJar, ApiError> {
     let user = user::Entity::find_by_email(&req.email)
@@ -84,7 +90,9 @@ pub async fn login(
         ));
     }
 
-    let tokens = create_session(&state.db, user.id, None).await?;
+    let user_agent = extract_user_agent(&headers);
+
+    let tokens = create_session(&state.db, user.id, user_agent).await?;
 
     let cookie = build_cookie(tokens.token);
 
@@ -109,6 +117,16 @@ pub async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<Coo
         .build();
 
     Ok(jar.add(expired_cookie))
+}
+
+fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
+    let value = headers.get(USER_AGENT)?.to_str().ok()?.trim();
+
+    if value.is_empty() {
+        return None;
+    }
+
+    Some(value.chars().take(USER_AGENT_MAX_LEN).collect())
 }
 
 fn build_cookie(raw_token: String) -> Cookie<'static> {
