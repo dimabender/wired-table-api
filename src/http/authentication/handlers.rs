@@ -3,6 +3,7 @@ use crate::{
         password::{hash_password, verify_password},
         session::create_session,
         token::{SESSION_ABSOLUTE_TTL_DAYS, hash_token},
+        user_agent::extract_user_agent,
     },
     entity::{session, user},
     error::{ApiError, MessageItem},
@@ -12,15 +13,13 @@ use crate::{
 };
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode, header::USER_AGENT},
+    http::{HeaderMap, StatusCode},
 };
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
 use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter};
-
-const USER_AGENT_MAX_LEN: usize = 512;
 
 pub async fn register(
     State(state): State<AppState>,
@@ -117,16 +116,6 @@ pub async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<Coo
         .build();
 
     Ok(jar.add(expired_cookie))
-}
-
-fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
-    let value = headers.get(USER_AGENT)?.to_str().ok()?.trim();
-
-    if value.is_empty() {
-        return None;
-    }
-
-    Some(value.chars().take(USER_AGENT_MAX_LEN).collect())
 }
 
 fn build_cookie(raw_token: String) -> Cookie<'static> {
